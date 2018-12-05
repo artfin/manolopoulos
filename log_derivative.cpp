@@ -3,6 +3,7 @@
 #include <cmath>
 #include <Eigen/Dense>
 #include <algorithm>
+#include <fstream>
 
 #include "./log.hpp"
 
@@ -33,7 +34,7 @@ void potmat(Eigen::MatrixXd & w, const double r, const int nch)
 // 51.82570724
 // 55.80351609
 {
-    assert(nch == 4 && "Example excepts nch=4");
+    assert(nch == 4 && "Example expects nch=4");
 
     double cos_r = std::cos(r);
 
@@ -74,7 +75,7 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
     double d6 = h * h / 6.0;
 
     double r = rmin;
-    potmat(Energy, w, r, nch);
+    potmat(w, r, nch);
     DEBUG_VALUE_OF(w);
 
     // use diagonal approximation to WKB initial value for log derivative matrix
@@ -85,7 +86,7 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
     // zero out z matrix
     z = Eigen::MatrixXd::Zero(nch, nch);
 
-    double wdiag = 0.0;
+    //double wdiag = 0.0;
     for ( int i = 0; i < nch; ++i )
     {
         //wdiag = w(i, i);
@@ -98,19 +99,33 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         //z(i, i) = std::sqrt(wdiag);
         z(i, i) = 1.0e20;
     }
+    
+    Eigen::MatrixXd z1_ab = Eigen::MatrixXd::Zero(nch, nch);
 
-    Eigen::MatrixXd z1 = Eigen::MatrixXd::Zero(nch, nch);
-    Eigen::MatrixXd z2 = Eigen::MatrixXd::Zero(nch, nch);
-    Eigen::MatrixXd z3 = Eigen::MatrixXd::Zero(nch, nch);
-    Eigen::MatrixXd z4 = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z1_ac = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z2_ac = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z3_ac = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z4_ac = Eigen::MatrixXd::Zero(nch, nch);
+    
+    Eigen::MatrixXd z1_cb = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z2_cb = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z3_cb = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z4_cb = Eigen::MatrixXd::Zero(nch, nch);
 
     Eigen::MatrixXd Qa = Eigen::MatrixXd::Zero(nch, nch);
     Eigen::MatrixXd Qb = Eigen::MatrixXd::Zero(nch, nch);
     Eigen::MatrixXd Qc = Eigen::MatrixXd::Zero(nch, nch);
 
+    Eigen::MatrixXd Z = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z_old = Eigen::MatrixXd::Zero(nch, nch);
+    Eigen::MatrixXd z_acb = Eigen::MatrixXd::Zero(nch, nch);
+    
+
+    std::ofstream ofs("det.txt");
+
     int istep = 1;
     // propagate z from rmin to rmax
-    for ( int kstep = 1; kstep <= nsteps; ++kstep, istep += 2 )
+    for ( int kstep = 1; kstep <= nsteps; ++kstep, istep += 2, z_old = z )
     {
         // the reference potential for the sector is the diagonal of the
         // coupling matrix evaluated at the centre of the sector, r = c
@@ -118,7 +133,7 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         r = rmin + istep * h;
         DEBUG_VALUE_OF(r);
         DEBUG_PRINT("Reference potential is evaluated at the centre of the sector (r = c)\n"); 
-        potmat(Energy, w, r, nch);
+        potmat(w, r, nch);
         
         // the reference potential:
         for ( int ich = 0; ich < nch; ++ich )
@@ -129,24 +144,26 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         double arg;
         for ( int ich = 0; ich < nch; ++ich )
         {
-            arg = std::sqrt(std::abs(wref(ich, ich)));
-            if ( wref(ich, ich) < 0.0 )
+            double pj2 = wref(ich, ich) - Energy;
+            arg = std::sqrt(std::abs(pj2));
+            
+            if ( pj2 < 0.0 )
             {
                 double ctn = 1.0 / std::tan(arg * h);
-                z1(ich, ich) = arg * ctn;
+                z1_ac(ich, ich) = z1_cb(ich, ich) = arg * ctn;
                 double csc = 1.0 / std::sin(arg * h);
-                z2(ich, ich) = arg * csc;
+                z2_ac(ich, ich) = z2_cb(ich, ich) = arg * csc;
             }
             else
             {
                 double ctnh = 1.0 / std::tanh(arg * h);
-                z1(ich, ich) = arg * ctnh;
+                z1_ac(ich, ich) = z1_cb(ich, ich) = arg * ctnh;
                 double csch = 1.0 / std::sinh(arg * h); 
-                z2(ich, ich) = arg * csch;
+                z2_ac(ich, ich) = z2_cb(ich, ich) = arg * csch;
             }
 
-            z3(ich, ich) = z2(ich, ich);
-            z4(ich, ich) = z1(ich, ich);
+            z3_ac(ich, ich) = z3_cb(ich, ich) = z2_ac(ich, ich);
+            z4_ac(ich, ich) = z4_cb(ich, ich) = z1_ac(ich, ich);
         } 
         //DEBUG_VALUE_OF(z1);
         //DEBUG_VALUE_OF(z2);
@@ -154,7 +171,7 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         // adjust quadrature contribution at r = a to account for
         // sector reference potential
         r = rmin + 2.0 * (kstep - 1) * h;
-        potmat(Energy, w, r, nch);
+        potmat(w, r, nch);
         Qa = d3 * (w - wref);
         std::cout << "r: " << r << " for Qa evaluation" << std::endl;
 
@@ -165,7 +182,7 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         // при расчете Wref
         // уже можно поганить эту матрицу, так что делаем inplace transformations  
         r = rmin + istep * h;
-        potmat(Energy, w, r, nch);
+        potmat(w, r, nch);
         std::cout << "r: " << r << " for Qc evaluation" << std::endl;
         w *= -d6;
         // U(c) = w(c) - wref(c), т.к. wref вычисляется как диагональная часть w(c), то U(c) имеет нулевые элементы на диагонали
@@ -182,8 +199,8 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         Qc = w * 4.0 / h;
         // w now contains Q(c)
        
-        z1 += Qa;
-        z4 += Qc;
+        z1_ac += Qa;
+        z4_ac += Qc;
         //DEBUG_VALUE_OF(z1);
         //DEBUG_VALUE_OF(z2);
         //DEBUG_VALUE_OF(z3);
@@ -193,33 +210,36 @@ void logdb(const double Energy, Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen:
         // from r = a to r = c (eqn 14 of Manolopoulos1986)
         
         // Y(c) = z4(a,c) - z3(a,c) * (z(a) + z1(a,c))^(-1) * z2(a,c)
-        z += z1;
+        z += z1_ac;
         z = z.inverse();
         // z now contains (z(a) + z1(a,c))^(-1)
-        z = z4 - z3 * z * z2;
+        z = z4_ac - z3_ac * z * z2_ac;
         // z now contains z(c)
        
-        z1 -= Qa;
-        z4 -= Qc;
-
         r = rmin + 2.0 * kstep * h;
-        potmat(Energy, w, r, nch);
+        potmat(w, r, nch);
         Qb = d3 * (w - wref);
         std::cout << "r: " << r << " for Qb evaluation" << std::endl;
 
-        z1 += Qc;
-        z4 += Qb; 
+        z1_cb += Qc;
+        z4_cb += Qb; 
 
         // propagate z matrix across the second half sector
         // from r = c to r = b (eqn 14 from Manolopoulos1986)
         
         // Y(b) = z4(c, b) - z3(c, b) * (z(c) + z1(c, b))^(-1) * z2(c, b)
-        z += z1;
+        z += z1_cb;
         z = z.inverse();
         // z now contains (z(c) + z1(c, b))^(-1)
-        z = z4 - z3 * z * z2;
+        z = z4_cb - z3_cb * z * z2_cb;
         // z now contains Y(b)
 
+        z_acb = (z4_ac + z1_cb).inverse();
+        z1_ab = z1_ac - z2_ac * z_acb * z3_ac;
+        Z = z_old - z1_ab;
+
+        r = rmin + 2.0 * (kstep - 1) * h;
+        ofs << r << " " << Z.determinant() << std::endl;
         DEBUG_VALUE_OF(z);
     }
 }
@@ -236,9 +256,9 @@ int main()
     const double rmin = 0.1;
     const double rmax = 1.0;
 
-    const int nsteps = 30;
+    const int nsteps = 100;
 
-    const double Energy = 20.0; 
+    const double Energy = 53.0; 
 
     logdb(Energy, z, w, wref, nch, rmin, rmax, nsteps);
     
