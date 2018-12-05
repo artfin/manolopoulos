@@ -16,7 +16,17 @@ template<class T> void __log__::value_of(const std::string& name, const T& value
 inline int delta(int i, int j) { return i == j; }
 
 void potmat(Eigen::MatrixXd & w, const double r, const int nch)
-// Thesis p.114, example 5.2
+// Example 5.2, p.114.
+// The second test problem in coupled Schrodinger equations section.
+// Study of special algorithms for solving Sturm-Liouville and Schroedinger equations
+// Verrie Ledoux, Thesis
+// The first few eigenvalues of the problem are:
+// 14.94180054
+// 17.04349658
+// 21.38042053
+// 26.92073133
+// 51.82570724
+// 55.80351609
 {
     assert(nch == 4 && "Example excepts for nch=4");
 
@@ -32,6 +42,19 @@ void potmat(Eigen::MatrixXd & w, const double r, const int nch)
 }
 
 void logdb(Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen::MatrixXd & wref, const int nch, const double rmin, const double rmax, const int nsteps)
+// routine to initialise the log derivative matrix, y, at r = rmin, 
+// and propagate it from rmin to rmax 
+// ----------------------------------------------------------
+// variables in call list:
+// z            matrix of dimension (nch, nch) 
+//              on return `z` contains the log derivative matrix at r = rmax
+// w            workspace for the potential matrix
+// wref         workspace for the reference potential
+// nch          number of coupled equations
+// rmin, rmax   integration range limits
+//              rmin is assummed to lie inside the classically forbidden
+//              region for all channels
+// nsteps       number of sectors partitioning integration range 
 {
     DEBUG_METHOD("logdb");
 
@@ -40,8 +63,6 @@ void logdb(Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen::MatrixXd & wref, con
 
     double d3 = h / 3.0;
     double d6 = h * h / 6.0;
-    //double d3 = h * h / 3.0;
-    //double d6 = h * h / 6.0;
 
     double r = rmin;
     potmat(w, r, nch);
@@ -67,12 +88,6 @@ void logdb(Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen::MatrixXd & wref, con
         z(i, i) = std::sqrt(wdiag);
     }
 
-    // БЕЗ ЭТОГО !!!!
-    // with a constant step size it is convenient to propagate 
-    // the matrix z = h * y rather than the log-derivative matrix, y
-    // (eqns 10, 12, 13 and 14 are multiplied by h)
-    //z *= h;
-
     Eigen::MatrixXd z1 = Eigen::MatrixXd::Zero(nch, nch);
     Eigen::MatrixXd z2 = Eigen::MatrixXd::Zero(nch, nch);
     Eigen::MatrixXd z3 = Eigen::MatrixXd::Zero(nch, nch);
@@ -82,6 +97,7 @@ void logdb(Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen::MatrixXd & wref, con
     // propagate z from rmin to rmax
     for ( int kstep = 1; kstep <= nsteps; ++kstep, istep += 2 )
     {
+        // обнулить z??
         // eq. 5.61 from Manolopoulos Thesis
         z += d3 * w; 
 
@@ -101,14 +117,13 @@ void logdb(Eigen::MatrixXd & z, Eigen::MatrixXd & w, Eigen::MatrixXd & wref, con
         // sector reference potential
         // (eqn 11 of Manolopoulos1986)
         z -= d3 * wref;
-        // итого мы посчитали h*Q(a) = h^2/3 U(a) = h^2/3(W(a) - Wref(a))
+        // итого мы посчитали Q(a) = h/3 U(a) = h/3(W(a) - Wref(a))
 
         // evaluate half sector propagators (eqn 10, Manolopoulos1986)
-        // z1 = h * y1, z2 = h * y2, z3 = h * y3, z4 = h * y4
+        // z1: y1, z2: y2, z3: y3, z4: y4
         double arg;
         for ( int ich = 0; ich < nch; ++ich )
         {
-            // почему-то там стоит 0.5?
             arg = std::sqrt(std::abs(wref(ich, ich)));
             if ( wref(ich, ich) < 0.0 )
             {
