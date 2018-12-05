@@ -1,3 +1,0 @@
-/home/artfin/Desktop/repos/manolopoulos/CMakeFiles/rebuild_cache.dir
-/home/artfin/Desktop/repos/manolopoulos/CMakeFiles/log_derivative.dir
-/home/artfin/Desktop/repos/manolopoulos/CMakeFiles/edit_cache.dir

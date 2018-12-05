@@ -1,1 +1,0 @@
-/home/artfin/psi4conda/bin/c++  -std=c++11 -Wall   CMakeFiles/log_derivative.dir/log_derivative.cpp.o CMakeFiles/log_derivative.dir/log.cpp.o  -o log_derivative 
